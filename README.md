@@ -484,15 +484,26 @@ per-language numbers and the failure analysis are in
 
 Target platform is Windows (ADR-011). Rules that follow from it:
 
-- Native modules are prebuilt where possible; no Visual Studio Build Tools are needed
+- Native modules ship a prebuilt binary inside the package; no Visual Studio Build Tools are needed
 - Paths are normalized to POSIX separators before storage, so an index built on Windows opens on Linux and back
 - A `.cmd` wrapper is installed alongside the POSIX entry point
 - `chokidar` reports paths with forward slashes while `root` arrives with backslashes, so anything comparing them must go through `path.relative`. A plain string comparison makes the watch root look like a path outside itself, and the watcher then reports nothing without any error
 
-npm blocks install scripts by default, and none of them are needed here. Every native
-dependency ships a prebuilt Windows binary inside its package, so `onnxruntime-node`,
-`better-sqlite3` and the six `tree-sitter-*` grammars all load without
-`npm install-scripts approve`. Verified on npm 12.1.0.
+**npm 11.21 or newer is required**, and `engines` says so. This is not about a
+script we need: npm below 11.21 does not block dependency install scripts, and it
+synthesises `node-gyp rebuild` for any package that ships a `binding.gyp` without
+an install script — `better-sqlite3` is exactly that case. The rebuild needs MSVC,
+the Windows runner does not have it, and the node-gyp bundled with npm 10 cannot
+even recognise the Visual Studio 18 that *is* installed there:
+
+```
+gyp ERR! find VS unknown version "undefined" found at "C:\Program Files\Microsoft Visual Studio\18\Enterprise"
+```
+
+Nothing here needs a script: `onnxruntime-node`, `better-sqlite3` and the six
+`tree-sitter-*` grammars all carry their binaries in the tarball, so with scripts
+blocked they load without `npm install-scripts approve`. This was found by CI, not
+by inspection — see [Measured quality](#measured-quality).
 
 ## Development
 

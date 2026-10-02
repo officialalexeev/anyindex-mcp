@@ -17,7 +17,8 @@
     "LICENSE"
   ],
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.19.0 || >=24.0.0",
+    "npm": ">=11.21.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/postbuild.mjs",

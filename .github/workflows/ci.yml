@@ -28,6 +28,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      # npm is pinned rather than taken from whatever the Node release bundles.
+      # npm below 11.21 does not block dependency install scripts, and it
+      # synthesises `node-gyp rebuild` for any package that ships a binding.gyp
+      # without an install script -- better-sqlite3 is exactly that case. The
+      # rebuild needs MSVC, which the Windows runner does not have, and node-gyp
+      # 11 cannot even recognise the Visual Studio 18 it finds there. Every native
+      # dependency ships a prebuilt binary, so the blocked path is the real one.
+      - run: npm install -g npm@^11.21.0
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
@@ -36,11 +44,16 @@ jobs:
   probe:
     name: probe (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - run: npm install -g npm@^11.21.0
       - run: npm ci
 
       # Прямая проверка главного блокирующего вопроса: есть ли prebuild'ы
@@ -66,12 +79,17 @@ jobs:
   native-fallback:
     name: native build from source (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - run: npm install -g npm@^11.21.0
       - name: Fallback path when prebuilds are unavailable
         run: |
           npm ci

@@ -55,6 +55,19 @@ local quality benchmark that ships with the repository.
 
 ### Fixed
 
+- **`npm ci` failed on Windows with Node 22.19.** npm below 11.21 does not block
+  dependency install scripts and synthesises `node-gyp rebuild` for any package
+  that ships a `binding.gyp` without an install script, which `better-sqlite3` is.
+  The rebuild needs MSVC, and the node-gyp inside npm 10 cannot even recognise
+  the Visual Studio 18 installed on the runner. `engines` now requires
+  `npm >= 11.21.0` and CI pins it, since Node bundles different npm per release.
+  No install script is needed anywhere: every native dependency carries its
+  binary in the tarball.
+- **Two CI jobs never ran.** `probe` and `native-fallback` referenced
+  `matrix.os` without declaring a matrix, so GitHub scheduled neither. The
+  `probe` job is the only thing that checked the native stack loads without a
+  toolchain, and it had never executed.
+
 - **`reindex` and `update` exit `1` when `--root` does not exist.** A mistyped path
   scanned nothing, printed "Done in 0.4s" and exited `0` — indistinguishable from a
   finished reindex, and exactly the silent failure ADR-010 exists to prevent.
