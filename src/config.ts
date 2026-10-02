@@ -3,8 +3,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-
 export const INDEX_DIR_NAME = '.anyindex';
 export const IGNORE_FILE = '.anyindexignore';
 
@@ -166,5 +164,3 @@ export function loadConfig(overrides: Partial<ServerConfig> = {}): ServerConfig 
     batchSize: overrides.batchSize ?? DEFAULTS.batchSize,
   };
 }
-
-export { packageRoot };
