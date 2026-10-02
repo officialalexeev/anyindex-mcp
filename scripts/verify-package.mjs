@@ -122,25 +122,30 @@ log(`\npacked bytes`);
 
 let tarball;
 let packed;
+// Where the entries in `packed` can actually be read from. It is this checkout
+// after `npm pack`, and the staging directory after a registry install — the two
+// are different trees, and every check below reads from the one it is verifying.
+let packedRoot = ROOT;
+let staging;
 
 if (fromRegistry) {
   // Install the *published* artifact and pack that, rather than trusting this
   // checkout to be the same tree. `--version` exists so a release job can name
   // the version it just published.
-  const staging = mkdtempSync(path.join(tmpdir(), 'aidx-registry-'));
-  try {
-    writeJson(path.join(staging, 'package.json'), { name: 'consumer', version: '1.0.0', type: 'module' });
-    run(NPM, ['install', '--no-audit', '--no-fund', `${NAME}@${versionArg}`], { cwd: staging });
-    const installed = path.join(staging, 'node_modules', NAME);
-    packed = walkFiles(installed).map((p) => path.relative(installed, p).split(path.sep).join('/'));
-    log(`  (driving ${NAME}@${versionArg} from the registry)`);
-  } finally {
-    rmSync(staging, { recursive: true, force: true });
-  }
+  staging = mkdtempSync(path.join(tmpdir(), 'aidx-registry-'));
+  writeJson(path.join(staging, 'package.json'), { name: 'consumer', version: '1.0.0', type: 'module' });
+  run(NPM, ['install', '--no-audit', '--no-fund', `${NAME}@${versionArg}`], { cwd: staging });
+  packedRoot = path.join(staging, 'node_modules', NAME);
+  // walkFiles already returns paths relative to the directory it walked. Passing
+  // them through path.relative again resolves them against the working directory,
+  // and on a different drive path.relative returns the absolute path instead.
+  packed = walkFiles(packedRoot);
+  log(`  (driving ${NAME}@${versionArg} from the registry)`);
 } else {
   tarball = path.join(ROOT, `${NAME}-${manifest.version}.tgz`);
   try { rmSync(tarball, { force: true }); } catch { /* first run */ }
   run(NPM, ['pack', '--silent'], { cwd: ROOT });
+  packedRoot = ROOT;
   packed = listTarball(tarball);
 }
 
@@ -175,11 +180,10 @@ check('no test files, source maps or dev config ship', () => {
 });
 
 check('no packed file has CRLF line endings', () => {
-  const root = fromRegistry ? null : ROOT;
   const offenders = [];
   for (const f of packed) {
     if (!/\.(js|ts|json|md|txt|yml|yaml|cjs|mjs)$/.test(f)) continue;
-    const bytes = readFileSync(path.join(root, f));
+    const bytes = readFileSync(path.join(packedRoot, f));
     for (let i = 0; i < bytes.length; i += 1) {
       if (bytes[i] === 10 && i > 0 && bytes[i - 1] === 13) { offenders.push(f); break; }
     }
@@ -204,7 +208,7 @@ check('no credential in the packed output', () => {
   const hits = [];
   for (const f of packed) {
     if (!/\.(js|ts|json|md)$/.test(f)) continue;
-    const text = readFileSync(path.join(ROOT, f), 'utf8');
+    const text = readFileSync(path.join(packedRoot, f), 'utf8');
     for (const p of patterns) {
       for (const m of text.matchAll(p)) {
         if (allow.some((a) => a.test(m[0]))) continue;
@@ -218,7 +222,7 @@ check('no credential in the packed output', () => {
 
 check('the bins start with a node shebang', () => {
   for (const [, target] of Object.entries(manifest.bin ?? {})) {
-    const first = readFileSync(path.join(ROOT, target), 'utf8').split('\n')[0];
+    const first = readFileSync(path.join(packedRoot, target), 'utf8').split('\n')[0];
     if (first !== '#!/usr/bin/env node') throw new Error(`${target} starts with "${first}"`);
   }
 });
@@ -324,6 +328,9 @@ if (!fromRegistry) {
 
 log(`\n${failures === 0 ? 'all checks passed' : `${failures} check(s) failed`}`);
 process.exitCode = failures === 0 ? 0 : 1;
+
+// After the summary, not before: the checks above read the staged tree.
+if (staging !== undefined) rmSync(staging, { recursive: true, force: true });
 
 // ------------------------------------------------------------------- utilities
 
