@@ -13,15 +13,36 @@ Fully local MCP server for indexing a codebase and answering semantic search que
 
 ## Quickstart
 
+Wire it into a client — nothing to install, see [Client configuration](#client-configuration):
+
+```
+npx --package anyindex-mcp anyindex-mcp-server
+```
+
+Build the index once from your project, so the first search has something to read:
+
+```bash
+npx --package anyindex-mcp anyindex-mcp reindex --root /path/to/project
+npx --package anyindex-mcp anyindex-mcp search --root /path/to/project "user authentication flow"
+```
+
+After a global `npm install -g anyindex-mcp` the `npx --package …` prefix drops away
+and the commands are just `anyindex-mcp reindex` and `anyindex-mcp search`.
+
+A second `reindex` only touches changed files. To keep the index fresh while you
+edit, pass `--watch` to the **server**, not to the CLI:
+
+```bash
+npx --package anyindex-mcp anyindex-mcp-server --watch
+```
+
+To work on anyindex-mcp itself, from a checkout:
+
 ```bash
 npm install
 npm run build
-npm run probe                                    # environment check, prints ms/chunk
-anyindex-mcp reindex --root /path/to/project    # build the index once
-anyindex-mcp search --root /path/to/project "user authentication flow"
+npm run probe      # environment check, prints ms/chunk
 ```
-
-A second `reindex` only touches changed files. Keep the MCP server with `--watch` to stay fresh while you work.
 
 ## Requirements
 
@@ -31,18 +52,35 @@ Embedding dominates the wall clock: plan against ~1 s/chunk on 4 cores, not the 
 
 ## Install
 
+**To use it as an MCP server, install nothing.** Every client below runs the
+package through `npx`, which downloads it on first start and caches it:
+
+```bash
+npx --package anyindex-mcp anyindex-mcp-server
+```
+
+**To use the command line from any project**, either prefix each call the same way
+or install it once:
+
+```bash
+npm install -g anyindex-mcp
+anyindex-mcp --version
+```
+
+`npm install -g` needs elevated rights on some Windows setups. The `npx` form works
+everywhere and is otherwise identical.
+
+**To work on anyindex-mcp itself**, from a checkout:
+
 ```bash
 npm install
 npm run build
+npm run probe      # environment check, prints ms/chunk
 ```
 
-Verify the environment before going further:
-
-```bash
-npm run probe
-```
-
-`probe` checks Node version, `sqlite-vec`, `code-chunk`, the embedding model, and write permissions, and prints throughput numbers. Exit code `1` means a blocking failure — the stack should be reconsidered before writing code.
+`probe` checks Node version, `sqlite-vec`, `code-chunk`, the embedding model, and
+write permissions, and prints throughput numbers. Exit code `1` means a blocking
+failure — the stack should be reconsidered before writing code.
 
 The package also installs as a dependency and puts both executables on your path.
 Checked from a tarball into an empty project, with npm's install scripts blocked:
@@ -51,17 +89,6 @@ Checked from a tarball into an empty project, with npm's install scripts blocked
 npm install ./anyindex-mcp-1.0.0.tgz
 npx anyindex-mcp help
 ```
-
-### Global install
-
-Install it once and use it from any project. Both commands land on your `PATH`:
-
-```bash
-npm install -g anyindex-mcp
-```
-
-`npm install -g` needs elevated rights on some Windows setups; `npx anyindex-mcp`
-without a global install works everywhere and is otherwise identical.
 
 ## Usage
 
@@ -76,11 +103,15 @@ Search output looks like this:
 
 ## Running as an MCP server
 
+The server speaks MCP over stdio. Nothing is written to stdout except JSON-RPC
+framing; all diagnostics go to stderr, so the channel stays clean. It takes no
+arguments and needs no configuration file.
+
 ```bash
-anyindex-mcp-server
+npx --package anyindex-mcp anyindex-mcp-server
 ```
 
-Speaks MCP over stdio. Nothing is written to stdout except JSON-RPC framing; all diagnostics go to stderr. Wire it into a client as described below.
+Wire it into a client as described below.
 
 ## Command-line reference
 
@@ -105,21 +136,217 @@ fewer results than you asked for.
 
 ## Client configuration
 
-The server speaks MCP over stdio. Installed globally, the config is one line —
-there is nothing to point at and nothing to set:
+Every client runs the same command and differs only in the config file it reads.
+All of them run the package through `npx`, so there is nothing to install first:
+
+```
+command: npx
+args:    -y --package anyindex-mcp anyindex-mcp-server
+env:     ANYINDEX_LOG_LEVEL=warn   (optional)
+```
+
+`--package` is load-bearing. `npx` resolves a **package name**, not a binary name,
+and this package ships two binaries — `anyindex-mcp` (the CLI) and
+`anyindex-mcp-server` (the MCP server). Writing `npx -y anyindex-mcp-server`
+resolves nothing:
+
+```
+npm error could not determine executable to run
+```
+
+<details open>
+<summary><strong>Claude Code</strong> (recommended)</summary>
+
+`claude mcp add` writes the entry for you. Everything after `--` goes to the
+server untouched, which is what keeps `-y` from being read as Claude Code's own
+flag:
+
+```bash
+claude mcp add anyindex-mcp -- npx -y --package anyindex-mcp anyindex-mcp-server
+```
+
+The same entry by hand in `.mcp.json` at the project root:
 
 ```json
 {
   "mcpServers": {
-    "anyindex-mcp": { "command": "anyindex-mcp-server" }
+    "anyindex-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "--package", "anyindex-mcp", "anyindex-mcp-server"],
+      "env": { "ANYINDEX_LOG_LEVEL": "warn" }
+    }
   }
 }
 ```
 
-**No project path in the config.** The working folder is taken from wherever the
-agent was started, resolved up to the nearest enclosing repository root. Start the
-agent in `~/work/myrepo/src/api` and it indexes `~/work/myrepo`, not the
-subdirectory. Outside a repository it uses the working directory as it stands.
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+`~/.cursor/mcp.json` for every project, `.cursor/mcp.json` for one, or
+**Settings → Customize → MCP** to add it through the UI.
+
+```json
+{
+  "mcpServers": {
+    "anyindex-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "--package", "anyindex-mcp", "anyindex-mcp-server"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>VS Code</strong></summary>
+
+`.vscode/mcp.json` in a project, or the user-profile `mcp.json` from the
+**MCP: Open User Configuration** command — servers go under a top-level
+**`servers`** object there:
+
+```json
+{
+  "servers": {
+    "anyindex-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "--package", "anyindex-mcp", "anyindex-mcp-server"]
+    }
+  }
+}
+```
+
+The portable alternative is `.mcp.json` at the project root, which other clients
+read too, under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "anyindex-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "--package", "anyindex-mcp", "anyindex-mcp-server"]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+**Claude → Settings → Developer → Edit Config.**
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "anyindex-mcp": {
+      "command": "npx",
+      "args": ["-y", "--package", "anyindex-mcp", "anyindex-mcp-server"]
+    }
+  }
+}
+```
+
+Claude Desktop has no working directory of its own, so it launches the server from
+its own config directory. See [which folder gets indexed](#which-folder-gets-indexed)
+below — for Desktop, `--root` is the one thing worth setting.
+
+Quit and restart Claude Desktop: it reads the file at launch, not on change.
+
+</details>
+
+<details>
+<summary><strong>Zed</strong></summary>
+
+**Settings → AI → MCP Servers → Add Local Server**, or open the settings file
+directly (`zed: open settings file`). Zed's key is `context_servers`:
+
+```json
+{
+  "context_servers": {
+    "anyindex-mcp": {
+      "command": "npx",
+      "args": ["-y", "--package", "anyindex-mcp", "anyindex-mcp-server"],
+      "env": {}
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>opencode</strong></summary>
+
+`mcp.<name>.command` is an **array** here, not a string, and there is a separate
+`cwd`. The schema is validated at startup and rejects unknown fields.
+
+Project config: `./opencode.json`, `./opencode.jsonc` or `.opencode/opencode.json`
+at the repository root. The configuration is read once at startup and is not
+reloaded — restart opencode after an edit.
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "anyindex-mcp": {
+      "type": "local",
+      "command": ["npx", "-y", "--package", "anyindex-mcp", "anyindex-mcp-server"],
+      "cwd": ".",
+      "environment": { "ANYINDEX_LOG_LEVEL": "warn" },
+      "enabled": true,
+      "timeout": 120000
+    }
+  }
+}
+```
+
+`timeout` matters: the first `anyindex_search` loads the model into a worker and
+took 2745 ms on a warm index, against 145 ms for the next call. opencode defaults
+to 5000 ms, which is enough — a client with a shorter timeout drops the first call
+while everything is actually working.
+
+</details>
+
+<details>
+<summary><strong>Any other client</strong></summary>
+
+Almost every MCP client reads a stdio server the same way:
+
+```
+command: npx
+args:    -y --package anyindex-mcp anyindex-mcp-server
+env:     ANYINDEX_ROOT=/absolute/path   (optional, see below)
+```
+
+On Windows, use `npx.cmd` if your client cannot launch `npx` through a shell. It
+takes no arguments, needs no API key, and writes its log to **stderr**, so stdout
+carries nothing but JSON-RPC.
+
+To confirm a client started it correctly, call `ping` — it reports the resolved
+configuration rather than just answering. See
+[docs/10-clients.md](https://github.com/officialalexeev/anyindex-mcp/blob/main/docs/10-clients.md)
+for per-client notes and what has and has not been verified.
+
+</details>
+
+### Which folder gets indexed
+
+**No project path is required in the config.** The working folder is taken from
+wherever the agent was started, resolved up to the nearest enclosing repository
+root. Start the agent in `~/work/myrepo/src/api` and it indexes `~/work/myrepo`,
+not the subdirectory. Outside a repository it uses the working directory as it
+stands.
 
 That also means the server has to be started *from* the project. A client that
 spawns MCP servers from its own config directory rather than the project would
@@ -132,55 +359,20 @@ one call to check:
   "models": "/home/you/.cache/anyindex-mcp/models" }
 ```
 
-Two clients spell the same thing differently.
+To pin the folder regardless of where the client starts from, set `ANYINDEX_ROOT`
+in `env` to an absolute path.
 
-**`.mcp.json` at the project root** — Claude Code, Cursor, VS Code. `command` is a
-string, arguments go in `args`, variables in `env`:
+### Before the first search
 
-```json
-{
-  "mcpServers": {
-    "anyindex-mcp": {
-      "command": "anyindex-mcp-server",
-      "env": { "ANYINDEX_LOG_LEVEL": "warn" }
-    }
-  }
-}
-```
-
-**opencode** wants `mcp.<name>.command` as an **array**, and takes a `cwd`:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "anyindex-mcp": {
-      "type": "local",
-      "command": ["anyindex-mcp-server"],
-      "cwd": ".",
-      "environment": { "ANYINDEX_LOG_LEVEL": "warn" },
-      "enabled": true,
-      "timeout": 120000
-    }
-  }
-}
-```
-
-The timeout matters: the first `anyindex_search` loads the model into a worker
-and took 2745 ms on a warm index, against 145 ms for the next call. opencode
-defaults to 5000 ms, which is enough — but a client with a shorter timeout will
-drop the first call while everything is actually working. Per-client notes are in
-[docs/10-clients.md](https://github.com/officialalexeev/anyindex-mcp/blob/main/docs/10-clients.md).
-
-**Before the first search, build the index once:**
+A fresh install has no index. Until one is built, `anyindex_search` refuses to
+answer rather than returning plausible-looking results, and `index_status` says so.
+Build it once, from the project:
 
 ```bash
-anyindex-mcp reindex --root .
+npx --package anyindex-mcp anyindex-mcp reindex --root .
 ```
 
-A fresh install has no index. Until `reindex` runs, `anyindex_search` refuses to
-answer rather than returning plausible-looking results, and `index_status` says
-so.
+After that a second `reindex` only touches changed files.
 
 ## Configuration
 

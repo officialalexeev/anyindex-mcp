@@ -38,9 +38,13 @@ local quality benchmark that ships with the repository.
   print its summary without naming a single failed check.
 - **`--version`** on the CLI, and `ANYINDEX_WATCH` alongside the existing
   `--watch` flag. Every other setting was reachable from both, these two were not.
-- **A `.mcp.json` block in the README** next to the opencode one, so Claude Code,
-  Cursor and VS Code have something to copy. The client notes pointed at a config
-  that the README did not contain.
+- **A `.mcp.json` block in the README** for every supported client, each behind a
+  collapsible heading: Claude Code, Cursor, VS Code, Claude Desktop, Zed, opencode.
+  The client notes pointed at a config the README did not contain.
+- **The launch command is `npx --package anyindex-mcp anyindex-mcp-server`.** The
+  package ships two binaries, and `npx` resolves package names rather than binary
+  names, so the shorter `npx -y anyindex-mcp-server` fails with `could not
+  determine executable to run`.
 - **A no-silent-degradation guarantee.** Chunking strategy is stored per chunk and
   counted in `index_status`; a tree-sitter failure falls back visibly instead of
   producing a working-looking index full of garbage. `ADR-010`.

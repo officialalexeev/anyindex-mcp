@@ -1,6 +1,6 @@
 # 10. MCP clients
 
-The README covers the general case: launching over stdio, environment variables, and the configuration for both `.mcp.json` clients and opencode. This document covers only what the general case leaves out — the quirks of specific clients and the traps that come with them.
+The README covers the general case: launching over stdio, environment variables, and the configuration for each client. This document covers only what the general case leaves out — the quirks of specific clients and the traps that come with them.
 
 ## 10.1 What all clients have in common
 
@@ -9,7 +9,13 @@ The server uses nothing but standard MCP capabilities: `tools/list`,
 of its own, no non-standard headers. Connecting to any MCP client therefore
 comes down to starting a process and exchanging messages over stdio.
 
-Three things to know when connecting:
+Four things to know when connecting:
+
+**`npx` resolves a package name, not a binary name.** The invocation is
+`npx --package anyindex-mcp anyindex-mcp-server`, and the `--package` flag is
+load-bearing. The package ships two binaries, so the shorter
+`npx -y anyindex-mcp-server` resolves nothing and npm answers
+`could not determine executable to run`. Measured with npm 12.1.0.
 
 **The client timeout matters more than it looks.** The first `anyindex_search` on a warm model
 takes seconds: the model loads into the worker. Measured on a warm index of
@@ -26,6 +32,13 @@ A client with a short timeout will drop out on the first call even though
 everything works. opencode defaults to a 5000 ms timeout, Claude Desktop has
 its own logic. Check your own client's value.
 
+**The indexed folder is the client's working directory, resolved upwards.**
+`resolveIndexRoot` walks up to the nearest `.git`, so an agent started in
+`src/api` indexes the repository rather than the subdirectory. Clients with no
+working directory of their own — Claude Desktop among them — start the server
+from their own config directory and index that instead. `cwd` in opencode and
+`ANYINDEX_ROOT` in `env` both fix it; `ping` reports the `root` actually chosen.
+
 **Indexing is not bounded by the timeout.** `index_update` and `index_rebuild`
 return a result immediately and work in the background. The client polls
 `index_status` until `running` becomes `false`.
@@ -33,6 +46,7 @@ return a result immediately and work in the background. The client polls
 **Standard input and output are taken.** Only JSON-RPC goes to stdout, the whole log
 goes to stderr. If a client merges the streams, the output will contain stray
 lines; the default level is `info`, and it can be lowered with `ANYINDEX_LOG_LEVEL`.
+The `probe` command deliberately ignores that variable — see `src/probe.ts`.
 
 ## 10.2 opencode
 
@@ -48,8 +62,8 @@ at the repository root. This lets you leave the global `~/.config/opencode/` alo
   "mcp": {
     "anyindex-mcp": {
       "type": "local",
-      "command": ["node", "/path/to/repo/dist/index.js", "--root", "/path/to/repo"],
-      "cwd": "/path/to/repo",
+      "command": ["npx", "-y", "--package", "anyindex-mcp", "anyindex-mcp-server"],
+      "cwd": ".",
       "environment": { "ANYINDEX_LOG_LEVEL": "warn" },
       "enabled": true,
       "timeout": 120000
@@ -58,12 +72,12 @@ at the repository root. This lets you leave the global `~/.config/opencode/` alo
 }
 ```
 
+`cwd: "."` is what decides the indexed folder — see §10.1. Running the checkout
+directly (`["node", "…/dist/index.js"]`) also works and skips the download.
+
 The schema is validated at startup and rejects unknown fields, so
 `additionalProperties` tolerates no extras here. The `mcp.<name>.type` and
 `command` fields are required; `command` is an array of strings, not a string.
-
-If the working directory matches the root of the indexed project, `--root` can be
-omitted: it defaults to the current directory.
 
 The `.opencode/` directory holds machine-specific path-bound settings, so it is
 listed in `.gitignore` together with `.anyindex/`.
@@ -95,9 +109,10 @@ these clients was ever run.
 
 | Client | How it was verified |
 |---|---|
-| SDK client on `@modelcontextprotocol/sdk` | 53 tests, the full handshake and call cycle |
-| opencode | `.opencode/opencode.json` reproduced verbatim, handshake 2176 ms, all 6 tools, real calls to `ping`, `index_status`, `anyindex_search` |
-| `.mcp.json` clients | Not verified |
+| SDK client on `@modelcontextprotocol/sdk` | `tests/index.test.ts`, 4 tests over the full handshake and call cycle |
+| opencode | `.opencode/opencode.json` reproduced verbatim, handshake 2176 ms, all 7 tools, real calls to `ping`, `index_status`, `anyindex_search` |
+| `npx` launch form | `npx --package <pkg> <bin>` measured with npm 12.1.0; the package-name-only form was measured failing |
+| `.mcp.json` clients other than opencode | Not verified |
 
 The opencode check did not go through opencode itself but through a script that read
 the same configuration and started the process with the same command. This confirms
