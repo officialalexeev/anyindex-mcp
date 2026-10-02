@@ -1,6 +1,6 @@
 # 09. Inventory: what is left
 
-Date: **2026-10-01**, checkpoint `checkpoint-v0.1`.
+Date: **2026-10-01**.
 
 Compiled by cross-checking the **code**, not the plan: every item was verified by searching the sources and running them, not taken from the documentation.
 
