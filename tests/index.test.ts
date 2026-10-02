@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test, before, after } from 'node:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,10 +10,23 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const serverEntry = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'index.js');
 
+// The database is pinned to a scratch file. Left to itself the server resolves
+// the index root upwards to the nearest repository, so these tests would read
+// whatever index the developer happens to have built in this working tree.
+let scratch = '';
+
+before(async () => {
+  scratch = await mkdtemp(path.join(tmpdir(), 'aidx-server-'));
+});
+
+after(async () => {
+  await rm(scratch, { recursive: true, force: true });
+});
+
 async function connect(): Promise<Client> {
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [serverEntry, '--root', path.dirname(serverEntry)],
+    args: [serverEntry, '--root', scratch, '--db', path.join(scratch, 'index.db')],
   });
   const client = new Client({ name: 'probe-client', version: '0.0.0' }, { capabilities: {} });
   await client.connect(transport);
