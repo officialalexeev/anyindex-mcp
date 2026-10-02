@@ -457,9 +457,9 @@ exists.
 
 ## Measured quality
 
-The indexer, hybrid search and watcher work end to end. 118 tests pass. Verified on
-Linux x64 and Windows x64; **macOS is unverified**, so "works on all platforms" is
-not yet true.
+The indexer, hybrid search and watcher work end to end. 118 tests pass. Verified
+on Linux x64, Windows x64 and macOS x64 — CI runs the build, the type check and
+the test suite on all three, on Node 22.19 and 24, plus `probe` on each.
 
 Retrieval quality was measured on 520 questions mined from commit history in Flask,
 Gson and Fastify, against a `grep` baseline charged with the same tokenizer: the

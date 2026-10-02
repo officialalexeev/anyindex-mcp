@@ -109,8 +109,10 @@ Published rather than hidden, because they are the reason to read the numbers:
 - No relevance threshold exists: across three models the distance gap between the
   worst positive and best negative case is negative. Results carry a distance and a
   confidence label instead of being silently filtered.
-- Verified on Linux x64 and Windows x64. **macOS is unverified**, so "works on all
-  platforms" is not yet true.
+- Verified on Linux x64, Windows x64 and macOS x64, on Node 22.19 and 24. The macOS
+  claim is the one that was outstanding: it is now covered by CI, which runs the
+  build, the type check and the test suite on all three platforms, plus `probe` on
+  each.
 - Embedding is the wall clock: about 1.2 s per chunk on 4 cores, which is minutes
   for a small repository and hours for a large one. `probe` reports an optimistic
   figure; plan against the real one.

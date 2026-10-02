@@ -30,7 +30,7 @@ This is what you excluded from the current pass:
 |---|---|---|---|
 | 1 | ✅ **Windows** — closed on 2026-09-30 | The owner's decision was against it (ADR-016), then reversed | — |
 | 2 | **A large repository, many cores** | An index of 435 chunks is too small to estimate the ANN threshold | Scaling, the ANN threshold and behaviour at 50k+ chunks are untested |
-| 3 | **macOS** | No machine | The claim "works on all operating systems" remains false |
+| 3 | ✅ **macOS** — closed on 2026-10-02 by CI | No machine locally, so `macos-latest` runs the build, the type check and the test suite on Node 22.19 and 24, plus `probe` | — |
 
 ### 2.1 Found and fixed on the first Windows run
 
