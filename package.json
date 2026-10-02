@@ -1,0 +1,76 @@
+{
+  "name": "anyindex-mcp",
+  "version": "1.0.0",
+  "description": "Fully local MCP server for indexing a codebase and answering semantic search queries about it. No external API calls, no telemetry, no server process to run.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "anyindex-mcp": "dist/cli.js",
+    "anyindex-mcp-server": "dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/postbuild.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "test": "npm run build && npm run build:test && node --test dist-test/tests/*.test.js",
+    "build:test": "tsc -p tsconfig.test.json",
+    "probe": "npm run build && node dist/probe.js",
+    "verify": "npm test && node dist/probe.js",
+    "clean": "node -e \"for (const d of ['dist','dist-test']) fs.rmSync(d,{recursive:true,force:true})\"",
+    "benchmark": "npm run build && node dist/benchmark.js",
+    "prepack": "npm run clean && npm run build:pkg",
+    "build:pkg": "tsc -p tsconfig.json && node scripts/postbuild.mjs && node scripts/strip-dev-artifacts.mjs",
+    "verify:package": "node scripts/verify-package.mjs",
+    "prepublishOnly": "npm run typecheck && npm test && node scripts/verify-package.mjs",
+    "cli": "node dist/cli.js",
+    "reindex": "node dist/cli.js reindex",
+    "search": "node dist/cli.js search"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.0",
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "better-sqlite3": "^13.0.3",
+    "chokidar": "^4.0.3",
+    "code-chunk": "0.1.14",
+    "fast-glob": "^3.3.3",
+    "ignore": "^7.0.5",
+    "sqlite-vec": "^0.1.9",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/officialalexeev/anyindex-mcp.git"
+  },
+  "homepage": "https://github.com/officialalexeev/anyindex-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/officialalexeev/anyindex-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "code-search",
+    "semantic-search",
+    "embeddings",
+    "tree-sitter",
+    "sqlite",
+    "offline",
+    "local-first"
+  ],
+  "types": "./dist/index.d.ts"
+}

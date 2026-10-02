@@ -1,0 +1,226 @@
+# Publish, and then check what was published.
+#
+# The version bump, the CHANGELOG entry and the tag are a maintainer's job, by
+# hand. This workflow starts at the tag.
+#
+# WHAT IS DIFFERENT FROM ANYDB, AND WHY
+# --------------------------------------
+# anydb-mcp publishes `src/` and needs no build. This package is TypeScript and
+# publishes `dist/`, so every job here builds before it packs. `npm test` already
+# starts with `npm run build`, and `prepack` rebuilds on its own, but the explicit
+# step below is what keeps the verify job honest if either of those ever changes.
+#
+# The four settings in the publish job are load-bearing, and all four were arrived
+# at by breaking them:
+#
+#   node-version 24.x      `22.x` resolves to a runtime shipping npm 10.9.9, and
+#                           npm below 11.5.1 has no OIDC code path at all. It never
+#                           attempts the exchange, finds no token, and reports the
+#                           result as a missing credential -- ENEEDAUTH -- which is
+#                           indistinguishable from a permissions problem.
+#   no `registry-url`       setup-node writes a project `.npmrc` containing
+#                           `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}`.
+#                           With no token in the environment that line is written
+#                           empty, npm then believes it holds a credential, and it
+#                           never reaches for the exchange that trusted publishing
+#                           depends on. npm's own documentation example sets this;
+#                           doing so here reintroduces the failure.
+#   no NODE_AUTH_TOKEN     Setting it is the documented way to *defeat* trusted
+#                           publishing: npm prefers a real token, and an unset
+#                           secret passes an empty string. The empty assignment in
+#                           the publish step is belt and braces.
+#   no dependency cache     A cached tree from an earlier commit is how a release
+#                           gets built from neither the lockfile nor the checkout.
+name: Publish
+
+on:
+  push:
+    tags: [ 'v*' ]
+  # Manual dispatch, for the "the tag was wrong" case. The version is read from
+  # the tag that is checked out, not from an input.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One publish at a time, and a run in flight is *not* cancelled: cancelling
+  # halfway through `npm publish` is how you get a half-published release.
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: verify before publishing
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        # The tag's commit, not the default branch: `v0.1.0` must publish the tree
+        # that `v0.1.0` points at.
+        ref: ${{ github.ref }}
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: 24.x
+        cache: 'npm'
+        registry-url: https://registry.npmjs.org
+    - run: npm ci
+
+    - run: npm run typecheck
+    - run: npm test
+
+    - name: Verify the packed package
+      run: |
+        set -o pipefail
+        node scripts/verify-package.mjs 2>&1 | tee verify-package.log
+
+    - name: Surface what failed
+      if: failure()
+      run: |
+        grep -E '^[[:space:]]*FAIL' verify-package.log | head -20 | \
+          sed 's/^[[:space:]]*/::error::/' || true
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: verify-package-log
+        path: verify-package.log
+        if-no-files-found: ignore
+
+  publish:
+    name: publish ${{ github.ref_name }}
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: npm
+    permissions:
+      contents: read
+      # The only credential this job has. The CLI exchanges this identity for a
+      # short-lived publish token scoped to this package, and nothing is stored.
+      id-token: write
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.ref }}
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        # 24.x, not 22.x. This is the fix for ENEEDAUTH; see the header.
+        node-version: 24.x
+
+    - name: Remove any .npmrc that would suppress the OIDC exchange
+      # setup-node's registry-url writes a token placeholder into .npmrc, which
+      # makes npm believe it is authenticated and skip the exchange entirely. The
+      # option is not set in this job, but the file outlives a cancelled run.
+      run: |
+        if [ -f .npmrc ]; then
+          echo "::notice title=stale .npmrc::removing it so npm falls through to the OIDC exchange"
+          rm -f .npmrc
+        fi
+
+    - run: npm ci
+
+    - name: Assert the runtime can do trusted publishing
+      # Checked before anything is published, and against npm's own documented
+      # numbers rather than a comment that can drift. A publish on a CLI without
+      # OIDC support fails as ENEEDAUTH, which is indistinguishable from a
+      # permissions problem.
+      run: |
+        node --input-type=module <<'EOF'
+        const atLeast = (v, floor) => {
+          const p = v.split('.').map(Number);
+          const f = floor.split('.').map(Number);
+          for (let i = 0; i < 3; i++) {
+            if (p[i] !== f[i]) return p[i] > f[i];
+          }
+          return true;
+        };
+        const node = process.versions.node;
+        const npm = (await import('node:child_process')).execSync('npm --version').toString().trim();
+        console.log(`::notice title=runtime::node ${node}, npm ${npm}`);
+
+        let ok = true;
+        if (!atLeast(node, '22.14.0')) {
+          console.log(`::error::node ${node} is below 22.14.0, npm's floor for trusted publishing`);
+          ok = false;
+        }
+        if (!atLeast(npm, '11.5.1')) {
+          console.log(`::error::npm ${npm} is below 11.5.1 and cannot do trusted publishing. Pin node-version to 24.x.`);
+          ok = false;
+        }
+        process.exit(ok ? 0 : 1);
+        EOF
+
+    - name: Refuse to publish a version that already exists
+      # The cheapest guard against the failure this workflow can cause. A re-run
+      # of a successful tag should stop here, not at npm.
+      run: |
+        version=$(node -p "require('./package.json').version")
+        tag="${GITHUB_REF_NAME#v}"
+        if [ "$version" != "$tag" ]; then
+          echo "::error::package.json says $version but the tag says $tag. Nothing was published."
+          exit 1
+        fi
+        if npm view "anyindex-mcp@$version" version >/dev/null 2>&1; then
+          echo "::error::anyindex-mcp@$version is already on the registry. Deprecate it or move the tag."
+          exit 1
+        fi
+
+    - name: Publish with provenance
+      # No NODE_AUTH_TOKEN, and that is deliberate -- see the header. Provenance is
+      # generated automatically by trusted publishing for a public package from a
+      # public repository; the flag states the intent rather than changing it.
+      #
+      # Teed, and the npm errors turned into annotations, because a bare "exit
+      # code 1" on this step is the single most expensive failure to diagnose in a
+      # publish workflow.
+      run: |
+        set -o pipefail
+        NODE_AUTH_TOKEN= npm publish --access public 2>&1 | tee publish.log
+    - name: Surface what npm said
+      if: failure()
+      run: |
+        {
+          echo "::error title=npm publish failed::see the npm error lines below"
+          grep -E '^npm error' publish.log | head -30 | sed 's/^/::error::/' || true
+        }
+
+  verify-published:
+    name: verify what is on the registry
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    # The tarball is not fetched by hand: the verify script installs the
+    # *published* artifact into a temp directory and drives it there, so this job
+    # tests what npm actually serves rather than a local build of it.
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: 24.x
+
+    # A full checkout, deliberately. verify-package.mjs reads this repository's
+    # package.json to assert the file list and the entry points, and a sparse
+    # checkout would make those reads fail in a way that looks like a packaging
+    # defect.
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.ref }}
+
+    - name: Wait for the registry to serve the version
+      # Propagation takes a few minutes. A 404 immediately after a publish is not
+      # a failure, so the check is "is it there yet", not "is it".
+      run: |
+        version="${GITHUB_REF_NAME#v}"
+        for attempt in $(seq 1 20); do
+          if npm view "anyindex-mcp@$version" version >/dev/null 2>&1; then
+            echo "anyindex-mcp@$version is on the registry after $((attempt * 30))s"
+            exit 0
+          fi
+          echo "attempt $attempt: not yet published, waiting 30s"
+          sleep 30
+        done
+        echo "::error::anyindex-mcp@$version did not appear on the registry within 10 minutes."
+        exit 1
+
+    - name: Drive the published package
+      run: node scripts/verify-package.mjs --from-registry --version=${{ github.ref_name }}

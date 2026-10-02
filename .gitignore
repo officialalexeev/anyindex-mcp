@@ -1,0 +1,26 @@
+node_modules/
+dist/
+dist-test/
+*.tsbuildinfo
+.tmp/
+.opencode/
+opencode.json
+opencode.jsonc
+
+
+# The index. Only the database lands here; the model cache is per-user and
+# lives outside the project, so it never needs ignoring.
+.anyindex/
+dist/.anyindex/
+
+.env
+.env.*
+!.env.example
+
+*.tgz
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini

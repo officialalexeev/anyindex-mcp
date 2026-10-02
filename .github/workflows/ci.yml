@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Приватный репозиторий: бесплатный лимит — 2000 Linux-минут в месяц.
+# Минуты тарифицируются в Linux-единицах: Windows = 2×, macOS = 10×.
+# Полный прогон этой матрицы — примерно 39 Linux-минут.
+jobs:
+  build:
+    name: build (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        node: ['22.19', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+
+  probe:
+    name: probe (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+
+      # Прямая проверка главного блокирующего вопроса: есть ли prebuild'ы
+      # нативных модулей под эту платформу. Без MSVC.
+      - name: Native modules load without a toolchain
+        shell: bash
+        run: node -e "require('better-sqlite3'); require('onnxruntime-node'); console.log('native ok')"
+
+      - run: npm run build
+      - name: Environment probe
+        # Лог перенаправляется в файл: артефакт ниже должен содержать вывод
+        # целиком, иначе в интерфейсе GitHub остаётся только последняя строка.
+        run: node dist/probe.js 2>&1 | tee probe-${{ matrix.os }}.log
+
+      - name: Upload probe log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-${{ matrix.os }}
+          path: probe-*.log
+          if-no-files-found: ignore
+
+  native-fallback:
+    name: native build from source (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Fallback path when prebuilds are unavailable
+        run: |
+          npm ci
+          npx --yes npm-install-scripts approve onnxruntime-node || true
+          npm rebuild better-sqlite3 || true
+      - run: npm run build
+      - run: npm test

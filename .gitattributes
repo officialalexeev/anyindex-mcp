@@ -1,0 +1,4 @@
+# npm pack reads working-tree bytes, not the index, and verify-package.mjs rejects a
+# tarball with CRLF in it. Without this rule a Windows clone keeps CRLF in the working
+# copy and ships a release that differs from what every diff shows.
+* text=auto eol=lf

@@ -1,0 +1,15 @@
+// Tests compile together with src/ so that a test imports a module exactly the
+// way a consumer would, but they are emitted to dist-test/ where rootDir is the
+// project root. Leaving them in the production build would force the whole tree
+// out as dist/src/, which is not what `main` and `bin` point at.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist-test",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist", "dist-test"]
+}
