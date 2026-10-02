@@ -64,6 +64,9 @@ local quality benchmark that ships with the repository.
 - **`ANYINDEX_LOG_LEVEL` is case-insensitive and reports unknown values.** `WARN`
   used to read as `info`, handing back more output than was asked for, and a typo
   looked exactly like a logger that ignores configuration.
+- **The README links to the repository instead of `docs/`.** The design notes are
+  not shipped in the tarball, so fifteen relative links had nowhere to resolve on
+  the package page.
 
 ### Changed
 

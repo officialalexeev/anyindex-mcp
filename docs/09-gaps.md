@@ -11,13 +11,13 @@ Compiled by cross-checking the **code**, not the plan: every item was verified b
 | ADR-009 was duplicated | Two blocks with the number 009 | One; the original is marked cancelled |
 | ADR-016 was missing from the README | 16 lines out of 17 | 17 lines, reconciled by a script |
 | The test database was getting into the package | `dist/.anyindex/index.db` 53 KB | Excluded via `.gitignore` + `prepack` |
-| `docs/` was not in the package while the README linked to it | 404 links on npm | `repository`/`homepage` added |
+| `docs/` was not in the package while the README linked to it | 15 relative links into a tarball that ships no `docs/` | The README links to the repository by absolute URL; the notes stay out of the tarball |
 | No `LICENSE` file despite `license: MIT` | — | MIT added |
-| `.map` files and tests in the published package | 39+ junk files | `strip-dev-artifacts.mjs`, 41 files, 55.8 KB |
+| `.map` files and tests in the published package | 39+ junk files | `strip-dev-artifacts.mjs`, 44 files, 62.9 kB |
 | `stale` was always 0 | The field looked meaningful but meant nothing | Counted as "known unprocessed changes" — the watcher's queue. Details in `06-environment.md` §17 |
 | `ANYINDEX_AUTOINDEX` did not work | Declared, not wired up | Indexing on startup, verified by running it |
 
-The package after the fix: **41 files, 55.8 KB**, with no source maps, tests or third-party data.
+The package after the fix: **44 files, 62.9 kB**, with no source maps, tests or third-party data. `npm pack --dry-run` prints these figures and `npm run verify:package` fails if junk appears in the tarball.
 
 `repository`, `homepage` and `bugs` in `package.json` point to
 `github.com/officialalexeev/anyindex-mcp`. The owner was filled in on 2026-10-01.
@@ -88,15 +88,14 @@ grows — the largest measured limitation of the results).
 ## 7. How to check the state
 
 ```bash
-npm run verify      # typecheck + build + test + probe
+npm run verify      # build + tests + probe
+npm run typecheck   # type check without emitting
 npm run benchmark   # quality benchmark, 27 queries
 npm run probe       # check the environment and hardware
 ```
 
- 107 tests. Windows-specific defects are only caught by a run on Windows:
-the watcher is checked in `src/watcher.test.ts`, the unfinished index in
+118 tests. Windows-specific defects are only caught by a run on Windows:
+the watcher is checked in `tests/watcher.test.ts`, the unfinished index in
 `src/index-service.ts` via `readIndexState`, event loss in
-`src/job.test.ts`, the `probe`/`benchmark` launch path in `src/cli.test.ts`
+`tests/job.test.ts`, the `probe`/`benchmark` launch path in `tests/cli.test.ts`
 via `subcommandEntry()`.
-
-Checkpoint: `git checkout checkpoint-v0.1` — return to this state.
