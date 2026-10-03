@@ -1,6 +1,6 @@
 {
   "name": "anyindex-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Fully local MCP server for indexing a codebase and answering semantic search queries about it. No external API calls, no telemetry, no server process to run.",
   "type": "module",
   "license": "MIT",

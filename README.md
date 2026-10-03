@@ -86,7 +86,7 @@ The package also installs as a dependency and puts both executables on your path
 Checked from a tarball into an empty project, with npm's install scripts blocked:
 
 ```bash
-npm install ./anyindex-mcp-1.0.0.tgz
+npm install ./anyindex-mcp-1.0.1.tgz
 npx anyindex-mcp help
 ```
 

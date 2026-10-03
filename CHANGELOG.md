@@ -9,6 +9,31 @@ Release links for every version are at the bottom of this file.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-03
+
+The same code as 1.0.0, published through the release pipeline instead of by hand.
+
+1.0.0 was published from a working tree that already carried every fix listed
+under it, so nothing was missing from that release. What it did not exercise is
+the pipeline: trusted publishing, provenance and the post-publish check had never
+run, because the first publish was done manually with a token. This release does
+the same work through `.github/workflows/release.yml` so that those three are
+proven rather than assumed.
+
+The tarball differs from 1.0.0 only in the version string.
+
+### Fixed
+
+- **`verify-package.mjs --from-registry` read the wrong tree.** `walkFiles` returns
+  paths relative to the directory it walked and they were passed through
+  `path.relative` again; on a different drive that returns an absolute path, so
+  the checks looked in this checkout while reporting the registry install. The
+  staging directory was also deleted before any check ran, and the CRLF check set
+  its root to `null` in registry mode without finishing the branch. Four checks
+  failed, so `release.yml` ended every publish with a red `verify-published`. The
+  script is not part of the tarball — `scripts/` is not in `files` — so this
+  changes the repository and not the package.
+
 ## [1.0.0] - 2026-10-02
 
 First public release. Seven MCP tools, a command line with six subcommands, and a
@@ -117,5 +142,6 @@ Published rather than hidden, because they are the reason to read the numbers:
   for a small repository and hours for a large one. `probe` reports an optimistic
   figure; plan against the real one.
 
-[Unreleased]: https://github.com/officialalexeev/anyindex-mcp/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/officialalexeev/anyindex-mcp/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/officialalexeev/anyindex-mcp/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/officialalexeev/anyindex-mcp/releases/tag/v1.0.0

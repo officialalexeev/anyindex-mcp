@@ -12,7 +12,7 @@
 // correct one in every diff.
 //
 //   node scripts/verify-package.mjs
-//   node scripts/verify-package.mjs --from-registry --version=1.0.0
+//   node scripts/verify-package.mjs --from-registry --version=<version>
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
