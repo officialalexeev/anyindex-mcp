@@ -101,8 +101,14 @@ check('repository.url is a GitHub URL for this package', () => {
 check('both entry points are declared', () => {
   const bins = Object.entries(manifest.bin ?? {});
   if (bins.length === 0) throw new Error('no bin');
-  for (const [name, target] of bins) {
-    if (!existsIn(target)) throw new Error(`${name} points at a missing file: ${target}`);
+  // Only meaningful for a local pack: the `verify-published` job checks out the
+  // repository without building it, so dist/ is absent there by design. Whether
+  // the entry points are actually shipped is answered by "the compiled entry
+  // points ship" below, which reads the installed tree in registry mode.
+  if (!fromRegistry) {
+    for (const [name, target] of bins) {
+      if (!existsIn(target)) throw new Error(`${name} points at a missing file: ${target}`);
+    }
   }
   return bins.map(([n]) => n).join(', ');
 });
